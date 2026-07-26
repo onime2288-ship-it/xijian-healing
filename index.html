@@ -3841,7 +3841,7 @@ let soundPlaying = false;
 
 function getComfortVolume() {
   const normalized = Number(volumeSlider.value) / 100;
-  return normalized === 0 ? 0 : Math.pow(normalized, 0.8) * 0.72;
+  return normalized === 0 ? 0 : Math.min(1, Math.pow(normalized, 0.62) * 1.05);
 }
 
 function ensureAudio() {
@@ -3857,6 +3857,14 @@ function ensureAudio() {
     masterGain.gain.value = getComfortVolume();
     masterGain.connect(audioContext.destination);
   }
+
+  // iOS/Safari may keep Web Audio muted until a source is started
+  // directly from a user gesture. A silent one-sample source unlocks it.
+  const unlockBuffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+  const unlockSource = audioContext.createBufferSource();
+  unlockSource.buffer = unlockBuffer;
+  unlockSource.connect(audioContext.destination);
+  unlockSource.start(0);
 
   return true;
 }
@@ -3908,7 +3916,7 @@ function connectSoftNoise({ type, frequency, q = 0.7, gainValue, color = "pink" 
   filter.type = type;
   filter.frequency.value = frequency;
   filter.Q.value = q;
-  gain.gain.value = gainValue;
+  gain.gain.value = Math.min(0.32, gainValue * 2.8);
   noise.connect(filter);
   filter.connect(gain);
   gain.connect(masterGain);
@@ -3947,7 +3955,10 @@ function createNoiseBurst({
   filter.frequency.value = frequency;
   filter.Q.value = q;
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.linearRampToValueAtTime(gainValue, now + Math.min(0.12, duration * 0.25));
+  gain.gain.linearRampToValueAtTime(
+    Math.min(0.24, gainValue * 2.4),
+    now + Math.min(0.12, duration * 0.25),
+  );
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   noise.connect(filter);
   filter.connect(gain);
