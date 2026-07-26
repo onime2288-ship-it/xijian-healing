@@ -1208,6 +1208,14 @@ input[type="text"]:focus {
   gap: 0.34rem;
 }
 
+.spread-slot.is-receiving .slot-placeholder {
+  border-color: rgba(214, 185, 111, 0.72);
+  background: rgba(255, 248, 232, 0.7);
+  box-shadow:
+    0 10px 22px rgba(199, 139, 61, 0.16),
+    inset 0 0 0 2px rgba(214, 185, 111, 0.16);
+}
+
 .slot-label,
 .result-position {
   display: grid;
@@ -1288,6 +1296,9 @@ input[type="text"]:focus {
   margin-left: -2.125rem;
   transform: translateX(calc((var(--stack) - 6.5) * 1.32rem)) translateY(var(--lift)) rotate(var(--rotation));
   transform-origin: 50% 130%;
+  backface-visibility: hidden;
+  contain: layout paint;
+  will-change: transform, opacity;
 }
 
 .tarot-ribbon .tarot-back:hover,
@@ -1299,6 +1310,40 @@ input[type="text"]:focus {
   filter: grayscale(0.45);
   opacity: 0.45;
   transform: translateX(calc((var(--stack) - 6.5) * 1.32rem)) translateY(calc(var(--lift) + 0.7rem)) rotate(var(--rotation));
+}
+
+.tarot-ribbon .tarot-back.is-drawing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.draw-flight-card {
+  position: fixed;
+  z-index: 100;
+  margin: 0;
+  pointer-events: none;
+  backface-visibility: hidden;
+  contain: layout paint;
+  transform-origin: center;
+  will-change: transform, opacity;
+  animation: cardDrawFlight 430ms cubic-bezier(0.18, 0.72, 0.2, 1) forwards;
+}
+
+@keyframes cardDrawFlight {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1) rotate(-2deg);
+  }
+
+  48% {
+    opacity: 1;
+    transform: translate3d(calc(var(--flight-x) * 0.56), calc(var(--flight-y) * 0.34 - 1.25rem), 0) scale(1.06) rotate(1.5deg);
+  }
+
+  100% {
+    opacity: 0.98;
+    transform: translate3d(var(--flight-x), var(--flight-y), 0) scale(var(--flight-scale-x), var(--flight-scale-y)) rotate(0deg);
+  }
 }
 
 .draw-actions {
@@ -2296,15 +2341,15 @@ input[type="range"] {
                 <div class="sound-choice-grid" id="soundChoices" aria-label="声音场景">
                   <button class="sound-choice is-active" type="button" data-sound="forest">
                     <span>叶间风声</span>
-                    <small>风吹过树叶，细碎而轻柔的沙沙声</small>
+                    <small>轻风掠过树叶，薄薄的沙沙声</small>
                   </button>
                   <button class="sound-choice" type="button" data-sound="rain">
                     <span>阴雨窗声</span>
-                    <small>阴雨天持续落雨，带一点柔和颗粒感</small>
+                    <small>无雷的绵密雨幕，适合慢慢入睡</small>
                   </button>
                   <button class="sound-choice" type="button" data-sound="ocean">
                     <span>海浪回流</span>
-                    <small>浪涌之后缓慢退水，低沉而有呼吸感</small>
+                    <small>远处慢浪来回退水，低沉有呼吸感</small>
                   </button>
                 </div>
               </div>
@@ -2312,9 +2357,9 @@ input[type="range"] {
               <div class="control-group">
                 <label class="range-label" for="volumeSlider">
                   <span>音量</span>
-                  <output id="volumeValue">26%</output>
+                  <output id="volumeValue">22%</output>
                 </label>
-                <input id="volumeSlider" type="range" min="0" max="100" value="26" />
+                <input id="volumeSlider" type="range" min="0" max="100" value="22" />
               </div>
 
               <div class="form-actions">
@@ -2960,6 +3005,7 @@ let guideQuestionIndex = 0;
 let selectedReadingCardIndex = 0;
 let selectedGuidanceKey = "life";
 let readingPanelMode = "meaning";
+let drawAnimationBusy = false;
 
 function randomIndex(max) {
   if (window.crypto && window.crypto.getRandomValues) {
@@ -3215,6 +3261,45 @@ function buildGuideQuestions(reading) {
   return [...spread.questions, ...cardQuestions];
 }
 
+function animateCardDraw(cardButton, slotIndex, onDone) {
+  const targetSlot = resultBoard.querySelector(`[data-slot-target="${slotIndex}"] .slot-placeholder`)
+    || resultBoard.querySelector(`[data-slot-target="${slotIndex}"]`);
+
+  if (!cardButton || !targetSlot || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    onDone();
+    return;
+  }
+
+  const from = cardButton.getBoundingClientRect();
+  const to = targetSlot.getBoundingClientRect();
+  const ghost = cardButton.cloneNode(true);
+  const scaleX = to.width / from.width;
+  const scaleY = to.height / from.height;
+
+  drawAnimationBusy = true;
+  cardButton.classList.add("is-drawing");
+  ghost.classList.add("draw-flight-card");
+  ghost.classList.remove("is-selected");
+  ghost.style.left = `${from.left}px`;
+  ghost.style.top = `${from.top}px`;
+  ghost.style.width = `${from.width}px`;
+  ghost.style.height = `${from.height}px`;
+  ghost.style.setProperty("--flight-x", `${to.left + to.width / 2 - (from.left + from.width / 2)}px`);
+  ghost.style.setProperty("--flight-y", `${to.top + to.height / 2 - (from.top + from.height / 2)}px`);
+  ghost.style.setProperty("--flight-scale-x", scaleX.toFixed(3));
+  ghost.style.setProperty("--flight-scale-y", scaleY.toFixed(3));
+
+  document.body.appendChild(ghost);
+  targetSlot.closest(".spread-slot")?.classList.add("is-receiving");
+
+  window.setTimeout(() => {
+    ghost.remove();
+    targetSlot.closest(".spread-slot")?.classList.remove("is-receiving");
+    drawAnimationBusy = false;
+    onDone();
+  }, 430);
+}
+
 function renderDrawStage(draw) {
   const selectedCount = draw.selected.length;
   const spread = draw.spread || getSpread(draw.theme.id);
@@ -3243,7 +3328,7 @@ function renderDrawStage(draw) {
             const drawIndex = draw.selected[index];
             const hasCard = Number.isInteger(drawIndex);
             return `
-              <article class="spread-slot${hasCard ? " has-card" : ""}">
+              <article class="spread-slot${hasCard ? " has-card" : ""}" data-slot-target="${index}">
                 <span class="slot-label">${escapeHtml(position.name)}</span>
                 ${
                   hasCard
@@ -3562,6 +3647,10 @@ ohForm.addEventListener("submit", (event) => {
 });
 
 resultBoard.addEventListener("click", (event) => {
+  if (drawAnimationBusy) {
+    return;
+  }
+
   const slotCard = event.target.closest("[data-slot-index]");
   if (slotCard && pendingDraw) {
     pendingDraw.selected.splice(Number(slotCard.dataset.slotIndex), 1);
@@ -3577,13 +3666,17 @@ resultBoard.addEventListener("click", (event) => {
 
     if (selectedIndex !== -1) {
       pendingDraw.selected.splice(selectedIndex, 1);
+      renderDrawStage(pendingDraw);
     } else if (pendingDraw.selected.length < spread.positions.length) {
-      pendingDraw.selected.push(drawIndex);
+      const slotIndex = pendingDraw.selected.length;
+      animateCardDraw(drawCard, slotIndex, () => {
+        pendingDraw.selected.push(drawIndex);
+        renderDrawStage(pendingDraw);
+      });
     } else {
       showToast(`已经抽满 ${spread.positions.length} 张牌了，可以查看结果。`);
     }
 
-    renderDrawStage(pendingDraw);
     return;
   }
 
@@ -3828,9 +3921,9 @@ const soundLabels = {
 };
 
 const soundListeningNotes = {
-  forest: "细碎的叶片沙沙声会随风轻轻起伏。",
-  rain: "持续雨幕里带着柔和、均匀的颗粒感。",
-  ocean: "浪涌与退水缓慢交替，像一段低沉呼吸。",
+  forest: "轻风掠过叶面，声音更薄、更散，不会有呼啸感。",
+  rain: "无雷、无暴雨，像远处雨幕落在窗外，颗粒感更柔。",
+  ocean: "远处慢浪一阵一阵靠近又退回，节奏更低、更稳。",
 };
 
 let selectedSound = "forest";
@@ -3838,35 +3931,67 @@ let audioContext = null;
 let masterGain = null;
 let activeNodes = [];
 let soundPlaying = false;
+let audioUnlocked = false;
 
 function getComfortVolume() {
   const normalized = Number(volumeSlider.value) / 100;
-  return normalized === 0 ? 0 : Math.min(1, Math.pow(normalized, 0.62) * 1.05);
+  return normalized === 0 ? 0 : Math.pow(normalized, 0.86) * 0.58;
 }
 
 function ensureAudio() {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) {
-    showToast("当前浏览器不支持网页声音。");
+    soundStatus.textContent = "当前浏览器不支持网页声音，请换 Safari、Chrome 或微信外部浏览器测试。";
     return false;
   }
 
-  if (!audioContext || audioContext.state === "closed") {
-    audioContext = new AudioContextClass();
-    masterGain = audioContext.createGain();
-    masterGain.gain.value = getComfortVolume();
-    masterGain.connect(audioContext.destination);
+  try {
+    if (!audioContext || audioContext.state === "closed") {
+      audioContext = new AudioContextClass();
+      masterGain = audioContext.createGain();
+      masterGain.gain.value = getComfortVolume();
+      masterGain.connect(audioContext.destination);
+      audioContext.onstatechange = () => {
+        if (soundPlaying && audioContext.state === "suspended") {
+          soundStatus.textContent = "声音被浏览器暂停了，请再点一次开始聆听。";
+          stopSound(false);
+        }
+      };
+    }
+  } catch (error) {
+    soundStatus.textContent = "声音初始化失败，请换浏览器或刷新页面后再试。";
+    return false;
   }
 
-  // iOS/Safari may keep Web Audio muted until a source is started
-  // directly from a user gesture. A silent one-sample source unlocks it.
-  const unlockBuffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
-  const unlockSource = audioContext.createBufferSource();
-  unlockSource.buffer = unlockBuffer;
-  unlockSource.connect(audioContext.destination);
-  unlockSource.start(0);
-
   return true;
+}
+
+async function unlockAudioOutput() {
+  if (audioUnlocked) {
+    return true;
+  }
+
+  try {
+    const silentGain = audioContext.createGain();
+    const oscillator = audioContext.createOscillator();
+    const now = audioContext.currentTime;
+
+    silentGain.gain.setValueAtTime(0.0001, now);
+    oscillator.frequency.value = 220;
+    oscillator.connect(silentGain);
+    silentGain.connect(audioContext.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.06);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      silentGain.disconnect();
+    };
+    audioUnlocked = true;
+    return true;
+  } catch (error) {
+    soundStatus.textContent = "浏览器没有放行声音，请确认不是静音模式，并再点一次开始聆听。";
+    return false;
+  }
 }
 
 function createNoiseSource(color = "pink") {
@@ -3916,7 +4041,7 @@ function connectSoftNoise({ type, frequency, q = 0.7, gainValue, color = "pink" 
   filter.type = type;
   filter.frequency.value = frequency;
   filter.Q.value = q;
-  gain.gain.value = Math.min(0.32, gainValue * 2.8);
+  gain.gain.value = gainValue;
   noise.connect(filter);
   filter.connect(gain);
   gain.connect(masterGain);
@@ -3955,10 +4080,7 @@ function createNoiseBurst({
   filter.frequency.value = frequency;
   filter.Q.value = q;
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.linearRampToValueAtTime(
-    Math.min(0.24, gainValue * 2.4),
-    now + Math.min(0.12, duration * 0.25),
-  );
+  gain.gain.linearRampToValueAtTime(gainValue, now + Math.min(0.12, duration * 0.25));
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   noise.connect(filter);
   filter.connect(gain);
@@ -4004,117 +4126,117 @@ function scheduleTexture(callback, minDelay, maxDelay) {
 function connectOcean() {
   const deepGain = connectSoftNoise({
     type: "lowpass",
-    frequency: 360,
-    q: 0.35,
-    gainValue: 0.09,
+    frequency: 300,
+    q: 0.28,
+    gainValue: 0.075,
     color: "brown",
   });
   const retreatGain = connectSoftNoise({
     type: "bandpass",
-    frequency: 820,
-    q: 0.32,
-    gainValue: 0.032,
+    frequency: 620,
+    q: 0.26,
+    gainValue: 0.026,
     color: "pink",
   });
   connectSoftNoise({
     type: "highpass",
-    frequency: 1800,
+    frequency: 2100,
     q: 0.2,
-    gainValue: 0.006,
+    gainValue: 0.0035,
     color: "white",
   });
-  addSlowSwell(deepGain, { frequency: 0.07, depth: 0.038 });
-  addSlowSwell(retreatGain, { frequency: 0.07, depth: 0.014 });
+  addSlowSwell(deepGain, { frequency: 0.052, depth: 0.044 });
+  addSlowSwell(retreatGain, { frequency: 0.052, depth: 0.011 });
   scheduleTexture(
     () =>
       createNoiseBurst({
         color: "pink",
         type: "bandpass",
-        frequency: 720,
-        q: 0.4,
-        gainValue: 0.035,
-        duration: 2.8 + Math.random() * 1.4,
+        frequency: 540 + Math.random() * 160,
+        q: 0.32,
+        gainValue: 0.024,
+        duration: 4.2 + Math.random() * 1.8,
       }),
-    4200,
-    7800,
+    5600,
+    9800,
   );
 }
 
 function connectRain() {
   const rainBody = connectSoftNoise({
     type: "lowpass",
-    frequency: 3200,
-    q: 0.25,
-    gainValue: 0.064,
+    frequency: 2450,
+    q: 0.18,
+    gainValue: 0.052,
     color: "pink",
   });
   connectSoftNoise({
-    type: "highpass",
-    frequency: 2300,
-    q: 0.22,
-    gainValue: 0.018,
+    type: "bandpass",
+    frequency: 1850,
+    q: 0.34,
+    gainValue: 0.014,
     color: "white",
   });
   const softRoll = connectSoftNoise({
     type: "lowpass",
-    frequency: 640,
-    q: 0.25,
-    gainValue: 0.018,
+    frequency: 520,
+    q: 0.2,
+    gainValue: 0.014,
     color: "brown",
   });
-  addSlowSwell(rainBody, { frequency: 0.045, depth: 0.009 });
-  addSlowSwell(softRoll, { frequency: 0.03, depth: 0.005 });
+  addSlowSwell(rainBody, { frequency: 0.028, depth: 0.006 });
+  addSlowSwell(softRoll, { frequency: 0.022, depth: 0.004 });
   scheduleTexture(
     () =>
       createNoiseBurst({
         color: "white",
         type: "bandpass",
-        frequency: 3600 + Math.random() * 1200,
-        q: 1.1,
-        gainValue: 0.012 + Math.random() * 0.008,
-        duration: 0.08 + Math.random() * 0.12,
+        frequency: 2500 + Math.random() * 760,
+        q: 0.72,
+        gainValue: 0.006 + Math.random() * 0.004,
+        duration: 0.1 + Math.random() * 0.14,
       }),
-    260,
-    720,
+    420,
+    980,
   );
 }
 
 function connectLeaves() {
   const windGain = connectSoftNoise({
     type: "lowpass",
-    frequency: 980,
-    q: 0.28,
-    gainValue: 0.052,
+    frequency: 760,
+    q: 0.22,
+    gainValue: 0.036,
     color: "pink",
   });
   const leafGain = connectSoftNoise({
     type: "bandpass",
-    frequency: 2300,
-    q: 0.48,
-    gainValue: 0.032,
+    frequency: 1850,
+    q: 0.42,
+    gainValue: 0.02,
     color: "pink",
   });
   connectSoftNoise({
     type: "highpass",
-    frequency: 4200,
-    q: 0.25,
-    gainValue: 0.008,
+    frequency: 3600,
+    q: 0.2,
+    gainValue: 0.0035,
     color: "white",
   });
-  addSlowSwell(windGain, { frequency: 0.09, depth: 0.022 });
-  addSlowSwell(leafGain, { frequency: 0.14, depth: 0.014 });
+  addSlowSwell(windGain, { frequency: 0.062, depth: 0.018 });
+  addSlowSwell(leafGain, { frequency: 0.11, depth: 0.01 });
   scheduleTexture(
     () =>
       createNoiseBurst({
         color: "pink",
         type: "bandpass",
-        frequency: 1800 + Math.random() * 1800,
-        q: 0.65,
-        gainValue: 0.018 + Math.random() * 0.014,
-        duration: 0.7 + Math.random() * 0.9,
+        frequency: 1500 + Math.random() * 1200,
+        q: 0.5,
+        gainValue: 0.01 + Math.random() * 0.007,
+        duration: 0.95 + Math.random() * 1.3,
       }),
-    760,
-    2100,
+    1200,
+    3200,
   );
 }
 
@@ -4150,6 +4272,13 @@ async function startSound() {
     return;
   }
 
+  if (Number(volumeSlider.value) === 0) {
+    soundStatus.textContent = "当前音量是 0，请把音量往右调一点再开始。";
+    return;
+  }
+
+  soundStatus.textContent = "正在启动声音，请保持当前页面打开。";
+
   try {
     if (audioContext.state !== "running") {
       await audioContext.resume();
@@ -4161,6 +4290,11 @@ async function startSound() {
 
   if (audioContext.state !== "running") {
     soundStatus.textContent = "声音仍处于暂停状态，请再点一次开始聆听。";
+    return;
+  }
+
+  const unlocked = await unlockAudioOutput();
+  if (!unlocked) {
     return;
   }
 
