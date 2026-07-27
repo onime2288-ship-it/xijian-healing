@@ -1274,11 +1274,29 @@ input[type="text"]:focus {
   padding: 0.72rem 0.35rem 0;
 }
 
-.deck-table > p {
+.ritual-note {
+  display: grid;
+  gap: 0.22rem;
+  margin: 0 auto;
+  max-width: 22rem;
+  border: 1px solid rgba(199, 139, 61, 0.12);
+  border-radius: var(--radius);
+  background: rgba(255, 252, 244, 0.72);
+  padding: 0.58rem 0.72rem;
+  text-align: center;
+}
+
+.ritual-note span {
+  color: #7b5f38;
+  font-size: 0.78rem;
+  font-weight: 620;
+}
+
+.ritual-note p {
   margin: 0;
   color: var(--muted);
   font-size: 0.78rem;
-  text-align: center;
+  line-height: 1.58;
 }
 
 .tarot-ribbon {
@@ -1487,6 +1505,38 @@ input[type="text"]:focus {
   box-shadow: 0 -10px 24px rgba(105, 96, 138, 0.11);
 }
 
+.tarotist-summary {
+  display: grid;
+  gap: 0.42rem;
+  border: 1px solid rgba(117, 101, 153, 0.08);
+  border-left: 3px solid var(--card-accent);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), var(--card-tint)),
+    rgba(255, 255, 255, 0.84);
+  padding: 0.68rem 0.72rem;
+}
+
+.tarotist-summary span {
+  color: var(--card-accent);
+  font-size: 0.78rem;
+  font-weight: 620;
+}
+
+.tarotist-summary p,
+.tarotist-summary strong {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.62;
+}
+
+.tarotist-summary strong {
+  color: #4f4b63;
+  font-weight: 620;
+}
+
 .insight-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1555,6 +1605,22 @@ input[type="text"]:focus {
   padding: 0.36rem 0.56rem;
 }
 
+.energy-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.34rem;
+}
+
+.energy-tags span {
+  border: 1px solid rgba(117, 101, 153, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #756c8c;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.34rem 0.52rem;
+}
+
 .position-guide,
 .detail-guidance {
   margin: 0;
@@ -1569,6 +1635,10 @@ input[type="text"]:focus {
   border-radius: var(--radius);
   background: linear-gradient(135deg, var(--card-tint), rgba(255, 255, 255, 0.68));
   padding: 0.7rem 0.72rem;
+}
+
+.energy-block {
+  border-left: 3px solid var(--card-accent);
 }
 
 .meaning-block strong,
@@ -1588,6 +1658,13 @@ input[type="text"]:focus {
   color: var(--muted);
   font-size: 0.76rem;
   line-height: 1.55;
+}
+
+.guidance-label {
+  margin-bottom: -0.08rem;
+  color: #756c8c;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .guidance-switch {
@@ -3261,6 +3338,64 @@ function buildGuideQuestions(reading) {
   return [...spread.questions, ...cardQuestions];
 }
 
+function getEnergyTone(card) {
+  if (card.orientation?.key === "reversed") {
+    return `这张牌的能量现在更像是被压住或走偏了。它不是坏牌，而是在提醒你：先看见卡点，能量才会重新流动。`;
+  }
+
+  return `这张牌的能量是相对顺流的。它像一个可以被你主动调用的资源，提醒你把内在感受落实到现实选择里。`;
+}
+
+function getShadowPrompt(card) {
+  if (card.orientation?.key === "reversed") {
+    return `阴影提醒：你可能正在用旧习惯保护自己，例如拖延、过度控制、讨好，或假装没有需求。`;
+  }
+
+  return `阴影提醒：即使牌面顺位，也不要急着把它变成标准答案。真正重要的是你此刻对它的身体反应。`;
+}
+
+function getCardKeywords(card) {
+  return [card.arcana, card.element, card.orientation.name];
+}
+
+function getPositionReading(card) {
+  const meaning = getCardMeaning(card);
+  return `在「${card.position.name}」这个位置上，${card.title}不是孤立出现的。它说明：${meaning}${card.position.guide}`;
+}
+
+function getScenarioReading(card) {
+  return card.guidance[selectedGuidanceKey] || card.guidance.life;
+}
+
+function getReadingPattern(reading) {
+  const reversedCount = reading.cards.filter((card) => card.orientation?.key === "reversed").length;
+  const majorCount = reading.cards.filter((card) => card.arcana.includes("大阿尔卡那")).length;
+
+  if (reversedCount >= Math.ceil(reading.cards.length / 2)) {
+    return "这组牌里逆位偏多，说明问题的重点不是“外面有没有机会”，而是你的能量还没有完全回到自己手里。先整理情绪、边界和节奏，比立刻推进更重要。";
+  }
+
+  if (majorCount >= Math.ceil(reading.cards.length / 2)) {
+    return "这组牌里大阿尔卡那偏多，代表这不是一个很表层的小问题。它更像一个阶段性的提醒：你正在经过某种身份、关系或方向上的调整。";
+  }
+
+  return "这组牌的能量比较落地，说明答案不只在感受里，也在具体行动里。你不需要一次想通全部，先处理最近一周最真实的一步。";
+}
+
+function buildTarotistReading(reading) {
+  const cards = reading.cards;
+  const first = cards[0];
+  const middle = cards[Math.floor(cards.length / 2)];
+  const last = cards[cards.length - 1];
+  const moodText = reading.mood ? `你带着「${reading.mood}」进入这次探索，` : "";
+
+  return {
+    opening: `${moodText}牌阵给出的第一层信息是：${first.position.name}的「${first.title}」先把你的注意力拉回当下，${middle.position.name}的「${middle.title}」指出真正需要面对的课题，而${last.position.name}的「${last.title}」给出下一步可以借力的方向。`,
+    pattern: getReadingPattern(reading),
+    advice: `实际建议：接下来 24 小时里，不要急着做一个“大决定”。先完成「${last.practice}」；如果这件事能让你更稳定，再把它延伸成一周的小计划。`,
+  };
+}
+
 function animateCardDraw(cardButton, slotIndex, onDone) {
   const targetSlot = resultBoard.querySelector(`[data-slot-target="${slotIndex}"] .slot-placeholder`)
     || resultBoard.querySelector(`[data-slot-target="${slotIndex}"]`);
@@ -3345,7 +3480,10 @@ function renderDrawStage(draw) {
       </div>
 
       <div class="deck-table">
-        <p>${canReveal ? "你也可以点上方牌位重新选择。" : "放慢呼吸，凭第一感觉从牌组中选一张。"}</p>
+        <div class="ritual-note">
+          <span>${canReveal ? "牌阵已经回应你的问题" : "抽牌前先停三秒"}</span>
+          <p>${canReveal ? "如果某张牌让你特别有感觉，可以点上方牌位重新选择；确认后再进入解读。" : `把注意力放回身体，默念「${escapeHtml(draw.intention)}」。不要挑最好看的牌，选第一张让你停顿的牌。`}</p>
+        </div>
         <div class="tarot-ribbon" aria-label="可抽取的塔罗牌背">
         ${draw.pool
           .map((card, index) => {
@@ -3402,6 +3540,7 @@ function renderReading(reading) {
     family: "家庭",
     work: "职场",
   };
+  const tarotistReading = buildTarotistReading(reading);
 
   resultBoard.innerHTML = `
     <div class="reading-screen">
@@ -3453,6 +3592,12 @@ function renderReading(reading) {
 
       <section class="insight-sheet" style="--card-accent: ${activeCard.accent}; --card-tint: ${activeCard.tint};">
         <div class="guide-grip" aria-hidden="true"></div>
+        <div class="tarotist-summary">
+          <span>塔罗师综合解读</span>
+          <p>${escapeHtml(tarotistReading.opening)}</p>
+          <p>${escapeHtml(tarotistReading.pattern)}</p>
+          <strong>${escapeHtml(tarotistReading.advice)}</strong>
+        </div>
         <div class="insight-tabs" aria-label="结果查看方式">
           <button class="${readingPanelMode === "meaning" ? "is-active" : ""}" type="button" data-reading-panel="meaning">牌面解读</button>
           <button class="${readingPanelMode === "guide" ? "is-active" : ""}" type="button" data-reading-panel="guide">引导问题</button>
@@ -3467,11 +3612,22 @@ function renderReading(reading) {
                   </div>
                   <em>${escapeHtml(activeCard.orientation.name)}</em>
                 </div>
+                <div class="energy-tags">
+                  ${getCardKeywords(activeCard)
+                    .map((keyword) => `<span>${escapeHtml(keyword)}</span>`)
+                    .join("")}
+                </div>
                 <p class="position-guide">${escapeHtml(activeCard.position.guide)}</p>
+                <div class="meaning-block energy-block">
+                  <strong>牌面能量</strong>
+                  <p>${escapeHtml(getEnergyTone(activeCard))}</p>
+                </div>
                 <div class="meaning-block">
                   <strong>这张牌在此位置的意义</strong>
-                  <p>${escapeHtml(getCardMeaning(activeCard))}</p>
+                  <p>${escapeHtml(getPositionReading(activeCard))}</p>
+                  <small>${escapeHtml(getShadowPrompt(activeCard))}</small>
                 </div>
+                <div class="guidance-label">选择你想落地的场景</div>
                 <div class="guidance-switch" aria-label="选择现实指引场景">
                   ${Object.entries(guidanceLabels)
                     .map(
@@ -3479,7 +3635,7 @@ function renderReading(reading) {
                     )
                     .join("")}
                 </div>
-                <p class="detail-guidance">${escapeHtml(activeCard.guidance[selectedGuidanceKey])}</p>
+                <p class="detail-guidance">${escapeHtml(getScenarioReading(activeCard))}</p>
                 <div class="micro-action"><strong>可以试试</strong><span>${escapeHtml(activeCard.practice)}</span></div>
               </div>`
             : `<div class="guide-panel" aria-live="polite">
